@@ -1,0 +1,22 @@
+{
+  "name": "rock-paper-scissors",
+  "version": "1.0.0",
+  "description": "smart contract prictice",
+  "main": "index.js",
+  "scripts": {
+    "compile": "truffle compile",
+    "test": "truffle test"
+  },
+  "repository": "https://github.com/hermeslin/RockPaperScissors",
+  "author": "hermeslin",
+  "license": "MIT",
+  "devDependencies": {
+    "@babel/core": "^7.1.2",
+    "@babel/polyfill": "^7.0.0",
+    "@babel/preset-env": "^7.1.0",
+    "@babel/register": "^7.0.0",
+    "bluebird": "^3.5.2",
+    "chai": "^4.2.0",
+    "chai-as-promised": "^7.1.1"
+  }
+}
