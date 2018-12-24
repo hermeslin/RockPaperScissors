@@ -1,6 +1,7 @@
 pragma solidity 0.4.24;
 
 contract RockPaperScissors {
+    address owner;
 
     enum elements { DEFAULT, ROCK, PAPER, SISSIORS }
 
@@ -14,6 +15,7 @@ contract RockPaperScissors {
         elements playerBElement;
         bool isExist;
         bool isOver;
+        bool isReward;
         address winner;
     }
 
@@ -21,46 +23,9 @@ contract RockPaperScissors {
         bytes32 => game
     ) public gameRooms;
 
-    modifier checkElement(uint element) {
-        require(element >= uint(elements.ROCK), "element should great than 1");
-        require(element <= uint(elements.SISSIORS), "element should less than 3");
-        _;
-    }
-
-    modifier gameRoomNotExists(bytes32 gameHash) {
-        require(!gameRooms[gameHash].isExist, "game room exist");
-        _;
-    }
-
-    modifier gameRoomExists(bytes32 gameHash) {
-        require(gameRooms[gameHash].isExist, "game room not exist");
-        _;
-    }
-
-    modifier gameRoomNotStart(bytes32 gameHash) {
-        require(gameRooms[gameHash].playerAElement == elements.DEFAULT, "game started, join another room");
-        require(gameRooms[gameHash].playerB == address(0), "game started, join another room");
-        require(gameRooms[gameHash].playerBElement == elements.DEFAULT, "game started, join another room");
-        _;
-    }
-
-    modifier gameRoomNotExpired(bytes32 gameHash) {
-        require(gameRooms[gameHash].timeoutBlockNumber > block.number, "game expired, join another room");
-        _;
-    }
-
-    modifier gameRoomIsCreator(bytes32 gameHash) {
-        require(gameRooms[gameHash].playerA == msg.sender, "not the game room creator");
-        _;
-    }
-
-    modifier gameRoomNotOver(bytes32 gameHash, uint playerAElement) {
-        require(playerAElement > uint(elements.DEFAULT), "playerA should set game element");
-        require(gameRooms[gameHash].playerB != address(0), "playerB Not Joined");
-        require(uint(gameRooms[gameHash].playerBElement) > uint(elements.DEFAULT), "playerB should set game element");
-        require(!gameRooms[gameHash].isOver, "game over, join another room");
-        _;
-    }
+    mapping (
+        address => uint
+    ) balances;
 
     // log event
     event LogCreateGameRoom (
@@ -78,7 +43,7 @@ contract RockPaperScissors {
         uint bets
     );
 
-    event LogStartGame (
+    event LogRevealGame (
         bytes32 gameHash,
         uint bets,
         uint playerAElement,
@@ -87,7 +52,87 @@ contract RockPaperScissors {
         bool isOver
     );
 
-    function createGameHash (uint8 element, bytes32 randomString) public view checkElement(element) returns (bytes32 gameHash) {
+    event LogRewardGame (
+        bytes32 gameHash,
+        uint bets,
+        address winner,
+        uint playerABalance,
+        uint playerBBalance,
+        bool isReward
+    );
+
+    event LogWithdraw (
+        address player,
+        uint balance
+    );
+
+    // modifier
+    modifier checkElement(uint8 element) {
+        require(element >= uint8(elements.ROCK), "element should great than 1");
+        require(element <= uint8(elements.SISSIORS), "element should less than 3");
+        _;
+    }
+
+    modifier gameRoomNotExists(bytes32 gameHash) {
+        require(!gameRooms[gameHash].isExist, "game room exist");
+        _;
+    }
+
+    modifier gameRoomExists(bytes32 gameHash) {
+        require(gameRooms[gameHash].isExist, "game room not exist");
+        _;
+    }
+
+    modifier playerBCanJoinGameRoom(bytes32 gameHash) {
+        require(gameRooms[gameHash].isExist, "game room not exist");
+        require(gameRooms[gameHash].playerAElement == elements.DEFAULT, "game started, join another room");
+        require(gameRooms[gameHash].playerB == address(0), "game started, join another room");
+        require(gameRooms[gameHash].playerBElement == elements.DEFAULT, "game started, join another room");
+        require(gameRooms[gameHash].timeoutBlockNumber > block.number, "game expired, join another room");
+        require(gameRooms[gameHash].bets == msg.value, "should set the same bet");
+        _;
+    }
+
+    modifier palyerACanRevealGame(bytes32 gameHash, uint8 element, bytes32 randomString) {
+        require(gameHash == createGameHash(element, randomString), "game hash not correct");
+        require(!gameRooms[gameHash].isOver, "game over, reveal another game");
+        require(gameRooms[gameHash].playerA == msg.sender, "not the game room creator");
+        require(element > uint8(elements.DEFAULT), "playerA should set game element");
+        require(gameRooms[gameHash].playerB != address(0), "playerB Not Joined");
+        require(uint8(gameRooms[gameHash].playerBElement) > uint8(elements.DEFAULT), "playerB should set game element");
+        _;
+    }
+
+    modifier playerBCanForceRevealGame(bytes32 gameHash) {
+        require(gameRooms[gameHash].timeoutBlockNumber <= block.number, "game not expired, can not reveal this game");
+        require(uint8(gameRooms[gameHash].playerAElement) == uint8(elements.DEFAULT), "playerA set game element before");
+        require(!gameRooms[gameHash].isOver, "game over, reveal another game");
+        require(gameRooms[gameHash].playerB == msg.sender, "playerB Not Joined");
+        require(uint8(gameRooms[gameHash].playerBElement) > uint8(elements.DEFAULT), "playerB should set game element");
+        _;
+    }
+
+    modifier playersCanReward(bytes32 gameHash) {
+        require(gameRooms[gameHash].timeoutBlockNumber <= block.number, "game not expired, can not get reward from this game");
+        require(gameRooms[gameHash].isOver, "game not over, get reward from another game");
+        require(!gameRooms[gameHash].isReward, "game rewarded before, choose another game");
+        _;
+    }
+
+    modifier playersCanWithdraw() {
+        require(balances[msg.sender] > 0, "player has no balance to withdraw");
+        _;
+    }
+
+    constructor () public {
+        owner = msg.sender;
+    }
+
+    function createGameHash (uint8 element, bytes32 randomString) public view
+        checkElement(element)
+        returns (
+            bytes32 gameHash
+        ) {
         return keccak256(abi.encodePacked(msg.sender, element, randomString, address(this)));
     }
 
@@ -96,6 +141,7 @@ contract RockPaperScissors {
         returns (
             bool success
         ) {
+
         gameRooms[gameHash] = game({
             blockNumber: block.number,
             timeoutBlockNumber: (block.number + timeout),
@@ -106,44 +152,137 @@ contract RockPaperScissors {
             playerBElement: elements.DEFAULT,
             isExist: true,
             isOver: false,
+            isReward: false,
             winner: address(0)
         });
 
-        game memory p = gameRooms[gameHash];
         emit LogCreateGameRoom({
             gameHash: gameHash,
-            blockNumber: p.blockNumber,
-            timeoutBlockNumber: p.timeoutBlockNumber,
-            playerA: p.playerA,
-            bets: p.bets
+            blockNumber: gameRooms[gameHash].blockNumber,
+            timeoutBlockNumber: gameRooms[gameHash].timeoutBlockNumber,
+            playerA: gameRooms[gameHash].playerA,
+            bets: gameRooms[gameHash].bets
         });
         return true;
     }
 
-    function joinGameRoom(bytes32 gameHash, uint element) public payable
+    function joinGameRoom(bytes32 gameHash, uint8 element) public payable
         checkElement(element)
-        gameRoomExists(gameHash)
-        gameRoomNotStart(gameHash)
-        gameRoomNotExpired(gameHash)
+        playerBCanJoinGameRoom(gameHash)
         returns (
             bool success
         ) {
 
-        gameRooms[gameHash].playerB = msg.sender;
-        gameRooms[gameHash].playerBElement = elements(element);
-        gameRooms[gameHash].bets += msg.value;
+        game storage g = gameRooms[gameHash];
 
-        game memory p = gameRooms[gameHash];
+        g.playerB = msg.sender;
+        g.playerBElement = elements(element);
+        g.bets += msg.value;
+
         emit LogJoinGameRoom({
             gameHash: gameHash,
-            playerB: p.playerB,
-            playerBElement: uint(p.playerBElement),
-            bets: p.bets
+            playerB: g.playerB,
+            playerBElement: uint8(g.playerBElement),
+            bets: g.bets
         });
         return true;
     }
 
-    function getGameRoomStatus(bytes32 gameHash) public view gameRoomExists(gameHash)
+    function revealGame(bytes32 gameHash, uint8 element, bytes32 randomString) public
+        checkElement(element)
+        gameRoomExists(gameHash)
+        palyerACanRevealGame(gameHash, element, randomString)
+        returns (
+            bool success
+        ) {
+
+        game storage g = gameRooms[gameHash];
+
+        g.winner = getWinner(msg.sender, element, g.playerB, uint8(g.playerBElement));
+        g.playerAElement = elements(element);
+        g.isOver = true;
+
+        emit LogRevealGame({
+            gameHash: gameHash,
+            bets: g.bets,
+            playerAElement: uint8(g.playerAElement),
+            playerBElement: uint8(g.playerBElement),
+            winner: g.winner,
+            isOver: g.isOver
+        });
+        return true;
+    }
+
+    function revealGameForce(bytes32 gameHash) public
+        gameRoomExists(gameHash)
+        playerBCanForceRevealGame(gameHash)
+        returns (bool success)
+        {
+        // playerB joined this game, but playerA not reveal the game in the time
+        game storage g = gameRooms[gameHash];
+
+        g.winner = msg.sender;
+        g.isOver = true;
+
+        emit LogRevealGame({
+            gameHash: gameHash,
+            bets: g.bets,
+            playerAElement: uint8(g.playerAElement),
+            playerBElement: uint8(g.playerBElement),
+            winner: g.winner,
+            isOver: g.isOver
+        });
+        return true;
+    }
+
+    function rewardGame(bytes32 gameHash) public
+        gameRoomExists(gameHash)
+        playersCanReward(gameHash)
+        returns (
+            bool success
+        ) {
+
+        game storage g = gameRooms[gameHash];
+
+        // in a draw
+        if (g.winner == address(0)) {
+            balances[g.playerA] += (g.bets / 2);
+            balances[g.playerB] += (g.bets / 2);
+        }
+        else {
+            balances[g.winner] += g.bets;
+        }
+        g.isReward = true;
+
+        emit LogRewardGame({
+            gameHash: gameHash,
+            bets: g.bets,
+            winner: g.winner,
+            playerABalance: balances[g.playerA],
+            playerBBalance: balances[g.playerB],
+            isReward: g.isReward
+        });
+        return true;
+    }
+
+    function withdraw() public
+        playersCanWithdraw()
+        returns (
+            bool success
+        ) {
+
+        uint balance = balances[msg.sender];
+        balances[msg.sender] = 0;
+        msg.sender.transfer(balance);
+
+        emit LogWithdraw({
+            player: msg.sender,
+            balance: balance
+        });
+        return true;
+    }
+
+    function getGameRoomState(bytes32 gameHash) public view
         returns (
             uint timeoutBlockNumber,
             uint bets,
@@ -153,51 +292,42 @@ contract RockPaperScissors {
             uint playerBElement,
             bool isExist,
             bool isOver,
+            bool isReward,
             address winner
         ) {
+
         game memory p = gameRooms[gameHash];
         return (
             p.timeoutBlockNumber,
             p.bets,
             p.playerA,
-            uint(p.playerAElement),
+            uint8(p.playerAElement),
             p.playerB,
-            uint(p.playerBElement),
+            uint8(p.playerBElement),
             p.isExist,
             p.isOver,
+            p.isReward,
             p.winner
         );
     }
 
-    function startGame(bytes32 gameHash, uint element) public payable
-        gameRoomExists(gameHash)
-        gameRoomNotExpired(gameHash)
-        gameRoomIsCreator(gameHash)
-        gameRoomNotOver(gameHash, element)
-        returns (bool success)
-        {
-        // ROCKER:1 ,PAPER: 2, SISSORS: 3
-        uint result;
-        result = (3 + uint(element) - uint(gameRooms[gameHash].playerBElement)) % 3;
+    function getWinner(address playerA, uint8 playerAElement, address playerB, uint8 playerBElement) private pure
+        returns (
+            address winner
+        ) {
+
+        uint8 result;
+        result = (3 + playerAElement - playerBElement) % 3;
+
         if (result == 1) {
-            gameRooms[gameHash].winner = msg.sender;
+            return playerA;
         }
         else if (result == 2) {
-            gameRooms[gameHash].winner = gameRooms[gameHash].playerB;
+            return playerB;
         }
-        gameRooms[gameHash].playerAElement = elements(element);
-        gameRooms[gameHash].isOver = true;
 
-        game memory p = gameRooms[gameHash];
-        emit LogStartGame({
-            gameHash: gameHash,
-            bets: p.bets,
-            playerAElement: uint(p.playerAElement),
-            playerBElement: uint(p.playerBElement),
-            winner: p.winner,
-            isOver: p.isOver
-        });
-        return true ;
+        // in a draw
+        return address(0);
     }
 
     function say(string word) public pure returns(string wordString ) {
