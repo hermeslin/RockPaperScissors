@@ -16,6 +16,14 @@ contract('RockPaperScissors', async (accounts) => {
     scissor: 3
   }
 
+  const gameState = {
+    default: 0,
+    create: 1,
+    playerJoin: 2,
+    reveal: 3,
+    reward: 4
+  }
+
   let rockPaperScissors;
   let gameHash;
 
@@ -40,6 +48,7 @@ contract('RockPaperScissors', async (accounts) => {
       assert.equal(args.timeoutBlockNumber, blockNumber.number + timeoutBlock);
       assert.equal(args.playerA, alice);
       assert.equal(args.bets.toString(), '10');
+      assert.equal(args.gameState, gameState.create);
     })
 
     it('should fail when game hash duplicate', async function () {
@@ -67,6 +76,7 @@ contract('RockPaperScissors', async (accounts) => {
       assert.equal(args.playerB, bob);
       assert.equal(args.playerBElement, gameElements.rock);
       assert.equal(args.bets.toString(), (20).toString());
+      assert.equal(args.gameState, gameState.playerJoin);
     })
 
     it('should fail when playB set wrong element', async function () {
@@ -124,7 +134,7 @@ contract('RockPaperScissors', async (accounts) => {
       assert.equal(args.playerAElement.toString(), gameElements.rock);
       assert.equal(args.playerBElement.toString(), gameElements.paper);
       assert.equal(args.winner, bob);
-      assert.equal(args.isOver, true);
+      assert.equal(args.gameState, gameState.reveal);
     })
   })
 
@@ -151,7 +161,7 @@ contract('RockPaperScissors', async (accounts) => {
       assert.equal(args.playerAElement.toString(), gameElements.default);
       assert.equal(args.playerBElement.toString(), gameElements.paper);
       assert.equal(args.winner, bob);
-      assert.equal(args.isOver, true);
+      assert.equal(args.gameState, gameState.reveal);
     })
   })
 
@@ -177,7 +187,7 @@ contract('RockPaperScissors', async (accounts) => {
       assert.equal(args.winner, bob);
       assert.equal(args.playerABalance.toString(), '0');
       assert.equal(args.playerBBalance.toString(), '20');
-      assert.equal(args.isReward, true);
+      assert.equal(args.gameState, gameState.reward);
     })
 
     it('should let player take their money back when game ended in a draw', async function () {
@@ -201,7 +211,7 @@ contract('RockPaperScissors', async (accounts) => {
       assert.equal(args.winner, 0);
       assert.equal(args.playerABalance.toString(), '30');
       assert.equal(args.playerBBalance.toString(), '30');
-      assert.equal(args.isReward, true);
+      assert.equal(args.gameState, gameState.reward);
     })
   })
 
