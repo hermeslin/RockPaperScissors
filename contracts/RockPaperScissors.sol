@@ -25,11 +25,11 @@ contract RockPaperScissors {
 
     mapping (
         address => uint
-    ) balances;
+    ) public balances;
 
     // log event
     event LogCreateGameRoom (
-        bytes32 gameHash,
+        bytes32 indexed gameHash,
         uint blockNumber,
         uint timeoutBlockNumber,
         address playerA,
@@ -37,14 +37,14 @@ contract RockPaperScissors {
     );
 
     event LogJoinGameRoom (
-        bytes32 gameHash,
+        bytes32 indexed gameHash,
         address playerB,
         uint playerBElement,
         uint bets
     );
 
     event LogRevealGame (
-        bytes32 gameHash,
+        bytes32 indexed gameHash,
         uint bets,
         uint playerAElement,
         uint playerBElement,
@@ -53,7 +53,7 @@ contract RockPaperScissors {
     );
 
     event LogRewardGame (
-        bytes32 gameHash,
+        bytes32 indexed gameHash,
         uint bets,
         address winner,
         uint playerABalance,
@@ -62,7 +62,7 @@ contract RockPaperScissors {
     );
 
     event LogWithdraw (
-        address player,
+        address indexed player,
         uint balance
     );
 
