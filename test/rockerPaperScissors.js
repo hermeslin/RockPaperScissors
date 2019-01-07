@@ -239,14 +239,4 @@ contract('RockPaperScissors', async (accounts) => {
       assert.equal(args.balance.toString(), '50');
     })
   })
-
-  /**
-   * default test
-   */
-  describe('say somthing', function () {
-    it('should return "hello world"', async function () {
-      let result = await rockPaperScissors.say("hello world");
-      assert.equal(result, 'hello world');
-    })
-  })
 })

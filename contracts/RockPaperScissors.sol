@@ -1,8 +1,6 @@
 pragma solidity 0.4.24;
 
 contract RockPaperScissors {
-    address owner;
-
     enum Elements { DEFAULT, ROCK, PAPER, SISSIORS }
     enum GameState { DEFAULT, CREATE, PLAYER_JOIN, REVEAL, REWARD }
 
@@ -112,10 +110,6 @@ contract RockPaperScissors {
     modifier playersCanWithdraw() {
         require(balances[msg.sender] > 0, "player has no balance to withdraw");
         _;
-    }
-
-    constructor () public {
-        owner = msg.sender;
     }
 
     function createGameHash (uint8 element, bytes32 randomString) public view
@@ -316,9 +310,5 @@ contract RockPaperScissors {
 
         // in a draw
         return address(0);
-    }
-
-    function say(string word) public pure returns(string wordString ) {
-        return word;
     }
 }
